@@ -1,0 +1,90 @@
+import type { BotLike, ContextType, UpdateName, User } from "@gramio/contexts";
+import { expectTypeOf } from "expect-type";
+import { Bot } from "../../src/bot.ts";
+import { Plugin } from "../../src/plugin.ts";
+
+{
+	const bot = new Bot("test");
+	bot.api.sendMessage({
+		chat_id: 1,
+		text: "ephemeral",
+		ephemeral_message_parameters: {
+			receiver_user_id: 2,
+			callback_query_id: "query",
+			replace_callback_query_message: true,
+		},
+	});
+
+	bot.api.sendMessage({
+		chat_id: 1,
+		text: "legacy",
+		// @ts-expect-error Bot API 10.3 requires ephemeral_message_parameters
+		receiver_user_id: 2,
+	});
+}
+
+{
+	const plugin = new Plugin("test");
+
+	expectTypeOf<typeof plugin>().toBeObject();
+
+	plugin
+		.derive("message", (context) => {
+			expectTypeOf<typeof context>().toEqualTypeOf<
+				ContextType<BotLike, "message">
+			>();
+			expectTypeOf<typeof context.from>().toEqualTypeOf<User>();
+
+			return {
+				someThing: "plugin1" as const,
+			};
+		})
+		.derive("message", (context) => {
+			expectTypeOf<typeof context>().toBeObject();
+			expectTypeOf<typeof context.from>().toEqualTypeOf<User>();
+
+			expectTypeOf<typeof context.someThing>().toEqualTypeOf<"plugin1">();
+
+			return {
+				someThing: "plugin2" as const,
+			};
+		});
+}
+
+{
+	const events = ["message", "callback_query", "chat_member"] as const;
+
+	const bot = new Bot("test")
+		.derive(events, (context) => {
+			expectTypeOf<typeof context>().toBeObject();
+			expectTypeOf<typeof context.from>().toEqualTypeOf<User>();
+
+			return {
+				contextUser: context.from,
+			};
+		})
+		.on(events, (context) => {
+			expectTypeOf<typeof context>().toBeObject();
+			expectTypeOf<typeof context.from>().toEqualTypeOf<User>();
+
+			expectTypeOf<typeof context.contextUser>().toEqualTypeOf<User>();
+		});
+
+	const plugin = new Plugin("test")
+		.derive(events, (context) => {
+			expectTypeOf<typeof context>().toBeObject();
+			expectTypeOf<typeof context.from>().toEqualTypeOf<User>();
+
+			return {
+				contextUser: context.from,
+			};
+		})
+		.on(events, (context) => {
+			expectTypeOf<typeof context>().toBeObject();
+			expectTypeOf<typeof context.from>().toEqualTypeOf<User>();
+
+			expectTypeOf<typeof context.contextUser>().toEqualTypeOf<User>();
+		});
+
+	bot.extend(plugin);
+}
